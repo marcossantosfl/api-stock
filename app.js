@@ -10,7 +10,7 @@ const corsOptions = {
   origin: [
     "http://localhost:4200",
     "http://localhost:3000",
-    "https://urchin-app-s8tif.ondigitalocean.app",
+    "https://stock-beryl-ten.vercel.app",
   ],
 };
 
