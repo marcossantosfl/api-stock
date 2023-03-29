@@ -28,6 +28,18 @@ module.exports = function (app) {
     controller.signup
   );
 
+    // Route for login
+    app.post(
+      "/api/auth/login",
+      [
+        check('phoneNumber')
+          .notEmpty().withMessage('phone number  required')
+          .trim(),
+      ],
+      handleValidationErrors,
+      controller.signin
+    );
+
   // Route for verifying SMS verification code
   app.post("/api/auth/verify", [
     check('userId').notEmpty().withMessage('user id required').trim(),

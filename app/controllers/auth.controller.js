@@ -80,6 +80,59 @@ exports.signup = async (req, res) => {
   }
 };
 
+// Function to handle user sign-in
+exports.signin = async (req, res) => {
+  try {
+    // Get phone number from request body
+    const phoneNumber = req.body.phoneNumber;
+
+    // Remove whitespace from phone number
+    const cleanedPhoneNumber = phoneNumber.replace(/\s+/g, '');
+
+    // Find user in database with matching phone number
+    const user = await User.findOne({ where: { phoneNumber: cleanedPhoneNumber } });
+
+    // If no user found, return error response
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    // Generate encrypted user ID and OTP code
+    const userId = encrypter.encrypt(user.id.toString());
+    const code = Math.floor(Math.random() * (9999 - 1000 + 1) + 1000);
+    const encryptedCode = encrypter.encrypt(code.toString());
+
+    // Send SMS with OTP code
+    require("dotenv").config();
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const client = require("twilio")(accountSid, authToken);
+
+    const message = await client.messages.create({
+      body: `Stock: Your OTP code is: ${code}, please do not share with anyone else`,
+      from: "++14346867271",
+      to: cleanedPhoneNumber,
+    });
+
+    if (message.status !== "queued" && message.status !== "sent") {
+      // If SMS failed to send, return error response
+      return res.status(500).send({ message: "SMS not sent" });
+    }
+
+    // Update user in database with new OTP code and reset resend count
+    await User.update(
+      { otp: encryptedCode, wasSmsSent: true, resendCount: 0 },
+      { where: { id: user.id } }
+    );
+
+    res.send({ message: "OTP code sent", userId: userId });
+
+  } catch (err) {
+    console.log(err.message)
+    res.status(500).send({ message: err.message });
+  }
+};
+
 // Verify code
 exports.verifyCode = async (req, res) => {
   const decryptedId = encrypter.dencrypt(req.body.userId);
@@ -234,7 +287,7 @@ exports.updateStock = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { action } = req.body;
+    const { action, quantity } = req.body;
 
     const stock = await Stock.findOne({ where: { id: id, userId: user.id } });
 
@@ -245,15 +298,15 @@ exports.updateStock = async (req, res) => {
     const { value, amount } = stock;
 
     if (action === 'add') {
-      stock.amount += 1;
+      stock.amount += quantity;
       const bill = await Bill.findOne({ where: { userId: user.id } });
-      bill.toPayTotal += stock.value;
+      bill.toPayTotal += value * quantity;
       await bill.save();
     } else if (action === 'subtract') {
-      if (stock.amount <= 0) {
+      if (stock.amount - quantity < 0) {
         return res.status(400).send({ error: "Stock amount can't be less than 0" });
       }
-      stock.amount -= 1;
+      stock.amount -= quantity;
     } else {
       return res.status(400).send({ error: "Invalid action" });
     }
@@ -265,6 +318,7 @@ exports.updateStock = async (req, res) => {
     return res.status(500).send({ error: error.message });
   }
 };
+
 
 exports.getBill = async (req, res) => {
   try {
