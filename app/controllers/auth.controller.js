@@ -276,8 +276,9 @@ exports.getAllStocks = async (req, res) => {
   }
 };
 
-//update stock
+// update stock
 exports.updateStock = async (req, res) => {
+  console.log(req.params.userId)
   try {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const user = await User.findOne({ where: { id: decryptedId } });
@@ -295,7 +296,7 @@ exports.updateStock = async (req, res) => {
       return res.status(400).send({ error: "Invalid stock ID" });
     }
 
-    const { value, amount } = stock;
+    const { value } = stock;
 
     if (action === 'add') {
       stock.amount += quantity;
@@ -313,12 +314,11 @@ exports.updateStock = async (req, res) => {
 
     await stock.save();
 
-    return res.status(200).send({ message: "Stock updated successfully" });
+    return res.status(200).send({ message: "Stock updated successfully", index });
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
 };
-
 
 exports.getBill = async (req, res) => {
   try {
