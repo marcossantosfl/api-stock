@@ -278,7 +278,7 @@ exports.getAllStocks = async (req, res) => {
 
 // update stock
 exports.updateStock = async (req, res) => {
-  console.log(req.params.userId)
+ 
   try {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const user = await User.findOne({ where: { id: decryptedId } });
@@ -296,25 +296,23 @@ exports.updateStock = async (req, res) => {
       return res.status(400).send({ error: "Invalid stock ID" });
     }
 
-    const { value } = stock;
-
     if (action === 'add') {
       stock.amount += quantity;
-      const bill = await Bill.findOne({ where: { userId: user.id } });
-      bill.toPayTotal += value * quantity;
-      await bill.save();
     } else if (action === 'subtract') {
       if (stock.amount - quantity < 0) {
         return res.status(400).send({ error: "Stock amount can't be less than 0" });
       }
       stock.amount -= quantity;
+      const bill = await Bill.findOne({ where: { userId: user.id } });
+      bill.toPayTotal += (stock.value * quantity);
+      await bill.save();
     } else {
       return res.status(400).send({ error: "Invalid action" });
     }
 
     await stock.save();
 
-    return res.status(200).send({ message: "Stock updated successfully", index });
+    return res.status(200).send({ message: "Stock updated successfully" });
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
@@ -349,7 +347,7 @@ exports.markAsDelivered = async (req, res) => {
 
     bill.earn += 10;
     bill.toPay += 0.25;
-    bill.toPayTotal += 10;
+    bill.toPayTotal -= 10;
     await bill.save();
 
     return res.status(200).send({ message: "Bill marked as delivered successfully" });
