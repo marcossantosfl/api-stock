@@ -64,20 +64,38 @@ module.exports = function (app) {
     authJwt.verifyToken,
     controller.getAllStocks);
 
-    app.post("/api/auth/stocks/:userId/:id", [
+    app.post(
+      "/api/auth/cart/:userId/create", 
+    [],
+    handleValidationErrors,
+    authJwt.verifyToken,
+    controller.createCartItem
+  );
+   
+
+    app.post(
+      "/api/auth/cart/:userId/update",
+      handleValidationErrors,
+      authJwt.verifyToken,
+      controller.updateCartItem
+    );
+    
+    app.post(
+      "/api/auth/cart/:userId/delete",
+      handleValidationErrors,
+      authJwt.verifyToken,
+      controller.deleteCartItem
+    );    
+
+    app.post(
+      "/api/auth/cart/:userId/close", [
     ], handleValidationErrors, 
     authJwt.verifyToken,
-    controller.updateStock);
+    controller.closeCart);
 
     app.get("/api/auth/bill/:userId", 
     authJwt.verifyToken,
     controller.getBill);
-
-    app.post("/api/auth/bill/:userId/mark-as-delivered", [
-      check('userId').notEmpty().withMessage('user id required').trim(),
-    ], handleValidationErrors, 
-    authJwt.verifyToken,
-    controller.markAsDelivered);
 
     app.post("/api/auth/bill/:userId/close", [
       check('userId').notEmpty().withMessage('user id required').trim(),

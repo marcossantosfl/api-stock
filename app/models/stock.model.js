@@ -16,20 +16,19 @@ module.exports = (sequelize, Sequelize) => {
     amount: {
       type: Sequelize.INTEGER,
       allowNull: false
-    },
-    userId: {
-      type: Sequelize.INTEGER,
-      references: {
-        model: "users",
-        key: "id"
-      }
     }
   });
+
 
   Stock.associate = (models) => {
     Stock.belongsTo(models.User, {
       foreignKey: "userId",
       onDelete: "CASCADE"
+    });
+
+    Stock.belongsToMany(models.Cart, {
+      through: models.CartStock,
+      foreignKey: 'stockId'
     });
   };
 

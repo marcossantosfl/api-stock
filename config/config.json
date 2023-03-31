@@ -1,0 +1,24 @@
+{
+  "development": {
+    "username": "doadmin",
+    "password": "AVNS_x3tZYhB4c9GCuZtc-Jv",
+    "database": "stock",
+    "host": "shiftycatcher-do-user-7219210-0.b.db.ondigitalocean.com",
+    "dialect": "mysql",
+    "port" : 25060
+  },
+  "test": {
+    "username": "root",
+    "password": null,
+    "database": "database_test",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "production": {
+    "username": "root",
+    "password": null,
+    "database": "database_production",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  }
+}

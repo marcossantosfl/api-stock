@@ -28,19 +28,49 @@ db.user = require("../models/user.model.js")(sequelize, Sequelize);
 db.role = require("../models/role.model.js")(sequelize, Sequelize);
 db.stock = require("../models/stock.model.js")(sequelize, Sequelize);
 db.bill = require("../models/bill.model.js")(sequelize, Sequelize);
+db.cart = require("../models/cart.model.js")(sequelize, Sequelize);
+db.cart_stock = require("../models/cart_stock.model.js")(sequelize, Sequelize);
+db.cart_bill = require("../models/cart_bill.model.js")(sequelize, Sequelize);
 
-// Define relationships between models
 db.role.belongsToMany(db.user, {
   through: "user_roles",
   foreignKey: "roleId",
-  otherKey: "userId",
+  otherKey: "userId"
 });
 
 db.user.belongsToMany(db.role, {
   through: "user_roles",
   foreignKey: "userId",
-  otherKey: "roleId",
+  otherKey: "roleId"
 });
+
+db.stock.belongsTo(db.user, {
+  foreignKey: "userId",
+  onDelete: "CASCADE"
+});
+
+db.stock.belongsToMany(db.cart, {
+  through: db.cart_stock,
+  foreignKey: "stockId",
+  otherKey: "cartId"
+});
+
+db.cart.belongsToMany(db.stock, {
+  through: db.cart_stock,
+  foreignKey: "cartId",
+  otherKey: "stockId"
+});
+
+db.cart.belongsTo(db.user, {
+  foreignKey: "userId",
+  onDelete: "CASCADE"
+});
+
+db.bill.belongsTo(db.user, {
+  foreignKey: "userId",
+  onDelete: "CASCADE"
+});
+
 
 // Define roles constants
 db.ROLES = ["user", "admin", "moderator"];

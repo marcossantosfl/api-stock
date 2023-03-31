@@ -5,9 +5,10 @@ const { Encrypter } = require("../middleware/crypto");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const Op = db.Sequelize.Op;
+const { v4: uuidv4 } = require('uuid');
 
 // Destructure models
-const { user: User, role: Role, stock: Stock, bill: Bill } = db;
+const { user: User, role: Role, stock: Stock, bill: Bill, cart: Cart, cart_stock: CartStock, cartBill: CartBill } = db;
 
 // Initialize encrypter
 const encrypter = new Encrypter();
@@ -109,7 +110,7 @@ exports.signin = async (req, res) => {
     const client = require("twilio")(accountSid, authToken);
 
     const message = await client.messages.create({
-      body: `Stock: Your OTP code is: ${code}, please do not share with anyone else`,
+      body: `Stock: Sua senha de acesso: ${code}, por favor, nao compartilhe com ninguem`,
       from: "++14346867271",
       to: cleanedPhoneNumber,
     });
@@ -200,7 +201,7 @@ exports.resendCode = async (req, res) => {
     const client = require("twilio")(accountSid, authToken);
 
     const message = await client.messages.create({
-      body: `Stock: Your OTP code is: ${code}, please do not share with anyone else`,
+      body: `Stock: Sua senha de acesso: ${code}, por favor, nao compartilhe com ninguem`,
       from: "++14346867271",
       to: user.phoneNumber,
     });
@@ -223,6 +224,7 @@ exports.resendCode = async (req, res) => {
 
 //create stock
 exports.createStock = async (req, res) => {
+
   try {
     const decryptedId = encrypter.dencrypt(req.body.userId);
     const user = await User.findOne({ where: { id: decryptedId } });
@@ -239,6 +241,7 @@ exports.createStock = async (req, res) => {
         userId: user.id
       };
     });
+
 
     const stocks = await Stock.bulkCreate(newStocks);
 
@@ -276,47 +279,70 @@ exports.getAllStocks = async (req, res) => {
   }
 };
 
-// update stock
-exports.updateStock = async (req, res) => {
- 
+// Create cart item
+exports.createCartItem = async (req, res) => {
+
   try {
-    const decryptedId = encrypter.dencrypt(req.params.userId);
-    const user = await User.findOne({ where: { id: decryptedId } });
+    const userId = encrypter.dencrypt(req.params.userId);
+    const { quantity, stockId } = req.body;
+    const user = await User.findOne({ where: { id: userId } });
 
     if (!user) {
       return res.status(404).send({ error: "User not found" });
     }
 
-    const { id } = req.params;
-    const { action, quantity } = req.body;
+    let cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
+    if (!cart) {
+      cart = await Cart.create({ userId: user.id, cartId: uuidv4(), isClosed: false });
+    }
 
-    const stock = await Stock.findOne({ where: { id: id, userId: user.id } });
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+
+    if (!bill) {
+      bill = await Bill.create({
+        userId: user.id,
+        earn: 0,
+        toPay: 0,
+        toPayTotal: 0,
+        paid: false,
+        end: false,
+      });
+    }
+
+    const stock = await Stock.findOne({ where: { id: stockId, userId: user.id } });
 
     if (!stock) {
       return res.status(400).send({ error: "Invalid stock ID" });
     }
 
-    if (action === 'add') {
-      stock.amount += quantity;
-    } else if (action === 'subtract') {
-      if (stock.amount - quantity < 0) {
-        return res.status(400).send({ error: "Stock amount can't be less than 0" });
-      }
-      stock.amount -= quantity;
-      const bill = await Bill.findOne({ where: { userId: user.id } });
-      bill.toPayTotal += (stock.value * quantity);
-      await bill.save();
-    } else {
-      return res.status(400).send({ error: "Invalid action" });
+    // Check if requested quantity is less than or equal to the available stock amount
+    if (parseInt(quantity) > stock.amount) {
+      return res.status(400).send({ error: "Requested quantity exceeds available stock" });
     }
 
+    const price = stock.value;
+
+    stock.amount -= parseInt(quantity);
     await stock.save();
 
-    return res.status(200).send({ message: "Stock updated successfully" });
+    const newCartItem = await CartStock.create({
+      cartId: cart.id,
+      stockId: stock.id,
+      quantity: parseInt(quantity),
+      price: price,
+    });
+
+    bill.toPay += price * parseInt(quantity);
+    bill.toPayTotal += price * parseInt(quantity);
+    await bill.save();
+
+    return res.status(201).send({ message: "Cart created successfully", cartItemId: stock.id });
   } catch (error) {
+    console.log(error.message);
     return res.status(500).send({ error: error.message });
   }
 };
+
 
 exports.getBill = async (req, res) => {
   try {
@@ -335,32 +361,182 @@ exports.getBill = async (req, res) => {
   }
 };
 
-exports.markAsDelivered = async (req, res) => {
+exports.closeCart = async (req, res) => {
+
   try {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const userId = decryptedId;
-    const bill = await Bill.findOne({ where: { userId, paid: false } });
 
-    if (!bill) {
-      return res.status(404).send({ error: "Bill not found" });
+    console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx: '+userId)
+    // Update the Cart
+    const updatedCart = await Cart.update({ isClosed: true }, {
+      where: {
+        userId: userId,
+        isClosed: false
+      }
+    });
+
+    console.log(JSON.stringify(updatedCart))
+
+    if (updatedCart[0] === 0) {
+      return res.status(404).send({ error: "Cart not found" });
     }
 
-    bill.earn += 10;
-    bill.toPay += 0.25;
-    bill.toPayTotal -= 10;
-    await bill.save();
+    // Find the paid Bill
+    const bill = await Bill.findOne({ where: { userId: userId, paid: false } });
+    if (!bill) {
+      return res.status(404).send({ error: "Paid Bill not found" });
+    }
 
-    return res.status(200).send({ message: "Bill marked as delivered successfully" });
+    const billId = bill.id;
+
+    // Create a new CartBill
+    const newCartBill = await CartBill.create({
+      cartId: updatedCart.id,
+      billId: billId
+    });
+
+    // Create a new Bill
+    const newBill = await Bill.create({
+      userId: userId,
+      earn: 0,
+      toPay: 0,
+      toPayTotal: 0,
+      paid: false,
+      end: false,
+    });
+
+    return res.status(200).send({ message: "Cart closed successfully" });
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
 };
 
+
+// Update cart item
+exports.updateCartItem = async (req, res) => {
+  try {
+    const userId = encrypter.dencrypt(req.params.userId);
+    const { quantity, cartItemId } = req.body;
+    const user = await User.findOne({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    let cart = await Cart.findOne({ where: { userId: user.id } });
+
+    if (!cart) {
+      return res.status(404).send({ error: "Cart not found" });
+    }
+
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+
+    if (!bill) {
+      return res.status(404).send({ error: "Bill not found" });
+    }
+
+    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId } });
+
+    if (!cartStockItem) {
+      return res.status(404).send({ error: "Cart item not found" });
+    }
+
+    const stock = await Stock.findOne({ where: { id: cartStockItem.stockId, userId: user.id } });
+
+    if (!stock) {
+      return res.status(400).send({ error: "Invalid stock ID" });
+    }
+
+    const price = stock.value;
+
+    // Validate the requested quantity
+    if (parseInt(quantity) > stock.amount) {
+      return res.status(400).send({ error: "Requested quantity exceeds available stock" });
+    }
+
+    // Update stock amount
+    stock.amount -= (parseInt(quantity) - cartStockItem.quantity);
+    await stock.save();
+
+    // Update the cart item quantity
+    cartStockItem.quantity = parseInt(quantity);
+    await cartStockItem.save();
+
+    // Update the bill
+    bill.toPay += price * (parseInt(quantity) - cartStockItem.quantity);
+    bill.toPayTotal += price * (parseInt(quantity) - cartStockItem.quantity);
+    await bill.save();
+
+    return res.status(200).send({ message: "Cart item updated successfully" });
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).send({ error: error.message });
+  }
+};
+
+exports.deleteCartItem = async (req, res) => {
+
+  try {
+    const userId = encrypter.dencrypt(req.params.userId);
+    const { cartItemId } = req.body;
+    const user = await User.findOne({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    let cart = await Cart.findOne({ where: { userId: user.id } });
+
+    if (!cart) {
+      return res.status(404).send({ error: "Cart not found" });
+    }
+
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+
+    if (!bill) {
+      return res.status(404).send({ error: "Bill not found" });
+    }
+
+    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId } });
+
+    if (!cartStockItem) {
+      return res.status(404).send({ error: "Cart item not found" });
+    }
+
+    const stock = await Stock.findOne({ where: { id: cartStockItem.stockId, userId: user.id } });
+
+    if (!stock) {
+      return res.status(400).send({ error: "Invalid stock ID" });
+    }
+
+    const price = stock.value;
+
+    // Restore stock amount
+    stock.amount += cartStockItem.quantity;
+    await stock.save();
+
+    // Delete the cart item
+    await cartStockItem.destroy();
+
+    // Update the bill
+    bill.toPay -= price * cartStockItem.quantity;
+    bill.toPayTotal -= price * cartStockItem.quantity;
+    await bill.save();
+
+    return res.status(200).send({ message: "Cart item deleted successfully", amount: stock.amount });
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).send({ error: error.message });
+  }
+};
+
+
 exports.closeBill = async (req, res) => {
   try {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const action = req.body.action;
-    
+
     if (action !== 'close') {
       return res.status(400).send({ error: "Invalid action" });
     }
