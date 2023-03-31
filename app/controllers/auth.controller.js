@@ -367,7 +367,6 @@ exports.closeCart = async (req, res) => {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const userId = decryptedId;
 
-    console.log('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx: '+userId)
     // Update the Cart
     const updatedCart = await Cart.update({ isClosed: true }, {
       where: {
