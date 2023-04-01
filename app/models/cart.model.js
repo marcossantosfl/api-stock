@@ -16,11 +16,15 @@ module.exports = (sequelize, Sequelize) => {
   });
 
   Cart.associate = (models) => {
-    Cart.belongsToMany(models.Stock, { through: "cart_stock" });
+    Cart.belongsToMany(models.Stock, {
+      through: models.CartStock,
+      foreignKey: 'cartId'
+    });
     Cart.belongsTo(models.User, {
       foreignKey: "userId",
       onDelete: "CASCADE"
     });
+    Cart.hasMany(models.CartStock, { foreignKey: 'cartId' });
   };
 
   return Cart;

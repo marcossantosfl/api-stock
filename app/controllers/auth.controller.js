@@ -8,7 +8,7 @@ const Op = db.Sequelize.Op;
 const { v4: uuidv4 } = require('uuid');
 
 // Destructure models
-const { user: User, role: Role, stock: Stock, bill: Bill, cart: Cart, cart_stock: CartStock, cartBill: CartBill } = db;
+const { user: User, role: Role, stock: Stock, bill: Bill, cart: Cart, cart_stock: CartStock, cart_bill: CartBill } = db;
 
 // Initialize encrypter
 const encrypter = new Encrypter();
@@ -296,7 +296,7 @@ exports.createCartItem = async (req, res) => {
       cart = await Cart.create({ userId: user.id, cartId: uuidv4(), isClosed: false });
     }
 
-    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false, paid: false } });
 
     if (!bill) {
       bill = await Bill.create({
@@ -333,16 +333,56 @@ exports.createCartItem = async (req, res) => {
     });
 
     bill.toPay += price * parseInt(quantity);
-    bill.toPayTotal += price * parseInt(quantity);
+   // bill.toPayTotal += 0.45;
     await bill.save();
 
-    return res.status(201).send({ message: "Cart created successfully", cartItemId: stock.id });
+    return res.status(201).send({ message: "Cart created successfully", cartItemId: stock.id, cartId: cart.id });
   } catch (error) {
     console.log(error.message);
     return res.status(500).send({ error: error.message });
   }
 };
 
+// Get all cart items
+exports.getCartItems = async (req, res) => {
+  
+  try {
+    const decryptedId = encrypter.dencrypt(req.params.userId);
+    const user = await User.findOne({ where: { id: decryptedId } });
+
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    const cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
+
+    if (!cart) {
+      return res.status(200).send({ error: "Cart not found" });
+    }
+
+    const cartItems = await CartStock.findAll({ 
+      where: { cartId: cart.id },
+    });
+    
+    const stockIds = cartItems.map(item => item.stockId);
+    
+    const stocks = await Stock.findAll({ where: { id: stockIds } });
+    
+    const cartItemsWithStock = cartItems.map(item => {
+      const stock = stocks.find(s => s.id === item.stockId);
+      return {
+        ...item.toJSON(),
+        stockName: stock ? stock.name : null
+      };
+    });
+    
+    return res.status(200).send({ cartItems: cartItemsWithStock });
+    
+  } catch (error) {
+    console.log(JSON.stringify(error.message))
+    return res.status(500).send({ error: error.message });
+  }
+};
 
 exports.getBill = async (req, res) => {
   try {
@@ -353,9 +393,42 @@ exports.getBill = async (req, res) => {
       return res.status(404).send({ error: "User not found" });
     }
 
-    const bill = await Bill.findOne({ where: { userId: user.id, paid: false } });
+    const bills = await Bill.findAll({
+      where: {
+        userId: user.id,
+        end: true,
+        paid: false
+      }
+    });
 
-    return res.status(200).send({ bill });
+    const billData = bills.map((bill) => {
+      return {
+        earn: bill.earn,
+        toPay: bill.toPay,
+        toPayTotal: bill.toPayTotal,
+      };
+    });
+
+    const earn = billData.reduce((acc, bill) => {
+      return acc + bill.earn;
+    }, 0);
+
+    const toPay = billData.reduce((acc, bill) => {
+      return acc + bill.toPay;
+    }, 0);
+
+    const toPayTotal = billData.reduce((acc, bill) => {
+      return acc + bill.toPayTotal;
+    }, 0);
+
+    return res.status(200).send({
+      bill: {
+        earn,
+        toPay,
+        toPayTotal,
+      },
+      bills: billData,
+    });
   } catch (error) {
     return res.status(500).send({ error: error.message });
   }
@@ -368,30 +441,38 @@ exports.closeCart = async (req, res) => {
     const userId = decryptedId;
 
     // Update the Cart
-    const updatedCart = await Cart.update({ isClosed: true }, {
-      where: {
-        userId: userId,
-        isClosed: false
-      }
-    });
+    // Find the cart that is not closed
+    const cart = await Cart.findOne({ where: { userId, isClosed: false } });
+    if (!cart) {
+      return res.status(404).send({ error: "Cart not found" });
+    }
 
-    console.log(JSON.stringify(updatedCart))
+    // Update the Cart
+    const updatedCart = await cart.update({ isClosed: true });
 
     if (updatedCart[0] === 0) {
       return res.status(404).send({ error: "Cart not found" });
     }
 
     // Find the paid Bill
-    const bill = await Bill.findOne({ where: { userId: userId, paid: false } });
+    const bill = await Bill.findOne({ where: { userId: userId, end: false, paid: false } });
     if (!bill) {
       return res.status(404).send({ error: "Paid Bill not found" });
     }
 
+    bill.earn += 10;
+    bill.toPay -= 10;
+    bill.toPayTotal += 0.45;
+    bill.end = true;
+    await bill.save();
+
+
     const billId = bill.id;
+
 
     // Create a new CartBill
     const newCartBill = await CartBill.create({
-      cartId: updatedCart.id,
+      cartId: cart.id,
       billId: billId
     });
 
@@ -407,6 +488,7 @@ exports.closeCart = async (req, res) => {
 
     return res.status(200).send({ message: "Cart closed successfully" });
   } catch (error) {
+    console.log(error.message)
     return res.status(500).send({ error: error.message });
   }
 };
@@ -423,19 +505,19 @@ exports.updateCartItem = async (req, res) => {
       return res.status(404).send({ error: "User not found" });
     }
 
-    let cart = await Cart.findOne({ where: { userId: user.id } });
+    let cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
 
     if (!cart) {
       return res.status(404).send({ error: "Cart not found" });
     }
 
-    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false, paid: false } });
 
     if (!bill) {
       return res.status(404).send({ error: "Bill not found" });
     }
 
-    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId } });
+    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId, cartId: cart.id } });
 
     if (!cartStockItem) {
       return res.status(404).send({ error: "Cart item not found" });
@@ -455,16 +537,15 @@ exports.updateCartItem = async (req, res) => {
     }
 
     // Update stock amount
-    stock.amount -= (parseInt(quantity) - cartStockItem.quantity);
+    stock.amount -= (parseInt(quantity));
     await stock.save();
 
     // Update the cart item quantity
-    cartStockItem.quantity = parseInt(quantity);
+    cartStockItem.quantity += parseInt(quantity);
     await cartStockItem.save();
 
     // Update the bill
-    bill.toPay += price * (parseInt(quantity) - cartStockItem.quantity);
-    bill.toPayTotal += price * (parseInt(quantity) - cartStockItem.quantity);
+    bill.toPay += price * parseInt(quantity);
     await bill.save();
 
     return res.status(200).send({ message: "Cart item updated successfully" });
@@ -485,25 +566,25 @@ exports.deleteCartItem = async (req, res) => {
       return res.status(404).send({ error: "User not found" });
     }
 
-    let cart = await Cart.findOne({ where: { userId: user.id } });
+    let cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
 
     if (!cart) {
       return res.status(404).send({ error: "Cart not found" });
     }
 
-    let bill = await Bill.findOne({ where: { userId: user.id, end: false } });
+    let bill = await Bill.findOne({ where: { userId: user.id, end: false, paid: false } });
 
     if (!bill) {
       return res.status(404).send({ error: "Bill not found" });
     }
 
-    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId } });
+    const cartStockItem = await CartStock.findOne({ where: { stockId: cartItemId, cartId: cart.id } });
 
     if (!cartStockItem) {
       return res.status(404).send({ error: "Cart item not found" });
     }
 
-    const stock = await Stock.findOne({ where: { id: cartStockItem.stockId, userId: user.id } });
+    const stock = await Stock.findOne({ where: { id: cartItemId, userId: user.id } });
 
     if (!stock) {
       return res.status(400).send({ error: "Invalid stock ID" });
@@ -520,7 +601,6 @@ exports.deleteCartItem = async (req, res) => {
 
     // Update the bill
     bill.toPay -= price * cartStockItem.quantity;
-    bill.toPayTotal -= price * cartStockItem.quantity;
     await bill.save();
 
     return res.status(200).send({ message: "Cart item deleted successfully", amount: stock.amount });
@@ -540,13 +620,15 @@ exports.closeBill = async (req, res) => {
       return res.status(400).send({ error: "Invalid action" });
     }
 
-    const bill = await Bill.findOne({ where: { userId: decryptedId } });
+    const bill = await Bill.findOne({ where: { userId: decryptedId, end: false, paid: false } });
 
     if (!bill) {
       return res.status(404).send({ error: "Bill not found" });
     }
 
     bill.end = true;
+    bill.toPay -= 10;
+    bill.toPayTotal += 0.45;
     await bill.save();
 
     return res.status(200).send({ message: "Bill closed" });

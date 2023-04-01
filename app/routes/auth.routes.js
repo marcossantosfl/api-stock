@@ -19,7 +19,7 @@ module.exports = function (app) {
       check('phoneNumber')
         .notEmpty().withMessage('phone number  required')
         .trim(),
-        check('agreedToTerms').equals("true").withMessage('You must agree to the Terms and Conditions and Privacy Policy')
+      check('agreedToTerms').equals("true").withMessage('You must agree to the Terms and Conditions and Privacy Policy')
         .trim(),
       verifySignUp.checkRolesExisted,
       verifySignUp.checkDuplicateNumber
@@ -28,17 +28,17 @@ module.exports = function (app) {
     controller.signup
   );
 
-    // Route for login
-    app.post(
-      "/api/auth/login",
-      [
-        check('phoneNumber')
-          .notEmpty().withMessage('phone number  required')
-          .trim(),
-      ],
-      handleValidationErrors,
-      controller.signin
-    );
+  // Route for login
+  app.post(
+    "/api/auth/login",
+    [
+      check('phoneNumber')
+        .notEmpty().withMessage('phone number  required')
+        .trim(),
+    ],
+    handleValidationErrors,
+    controller.signin
+  );
 
   // Route for verifying SMS verification code
   app.post("/api/auth/verify", [
@@ -48,58 +48,64 @@ module.exports = function (app) {
 
   app.post("/api/auth/resend", [
     check('userId').notEmpty().withMessage('user id required').trim(),
-    ], handleValidationErrors, controller.resendCode);
+  ], handleValidationErrors, controller.resendCode);
 
-    app.post("/api/auth/stocks", [
-      check('userId').notEmpty().withMessage('user id required').trim(),
-      check('stocks.*.name').notEmpty().withMessage('Stock name is required').trim(),
-      check('stocks.*.value').notEmpty().withMessage('Stock value is required').trim(),
-      check('stocks.*.amount').notEmpty().withMessage('Stock amount is required').trim(),
-    ], handleValidationErrors, 
+  app.post("/api/auth/stocks", [
+    check('userId').notEmpty().withMessage('user id required').trim(),
+    check('stocks.*.name').notEmpty().withMessage('Stock name is required').trim(),
+    check('stocks.*.value').notEmpty().withMessage('Stock value is required').trim(),
+    check('stocks.*.amount').notEmpty().withMessage('Stock amount is required').trim(),
+  ], handleValidationErrors,
     authJwt.verifyToken,
     controller.createStock);
 
-    app.get("/api/auth/stocks/:userId", [
-    ], handleValidationErrors, 
+  app.get("/api/auth/stocks/:userId", [
+  ], handleValidationErrors,
     authJwt.verifyToken,
     controller.getAllStocks);
 
-    app.post(
-      "/api/auth/cart/:userId/create", 
+  app.post(
+    "/api/auth/cart/:userId/create",
     [],
     handleValidationErrors,
     authJwt.verifyToken,
     controller.createCartItem
   );
-   
 
-    app.post(
-      "/api/auth/cart/:userId/update",
-      handleValidationErrors,
-      authJwt.verifyToken,
-      controller.updateCartItem
-    );
-    
-    app.post(
-      "/api/auth/cart/:userId/delete",
-      handleValidationErrors,
-      authJwt.verifyToken,
-      controller.deleteCartItem
-    );    
 
-    app.post(
-      "/api/auth/cart/:userId/close", [
-    ], handleValidationErrors, 
+  app.post(
+    "/api/auth/cart/:userId/update",
+    handleValidationErrors,
+    authJwt.verifyToken,
+    controller.updateCartItem
+  );
+
+  app.post(
+    "/api/auth/cart/:userId/delete",
+    handleValidationErrors,
+    authJwt.verifyToken,
+    controller.deleteCartItem
+  );
+
+  app.post(
+    "/api/auth/cart/:userId/close", [
+  ], handleValidationErrors,
     authJwt.verifyToken,
     controller.closeCart);
 
-    app.get("/api/auth/bill/:userId", 
+  app.get(
+    "/api/auth/cart/:userId",
+    handleValidationErrors,
+     authJwt.verifyToken, controller.getCartItems);
+
+
+  app.get("/api/auth/bill/:userId",
     authJwt.verifyToken,
     controller.getBill);
 
-    app.post("/api/auth/bill/:userId/close", [
-      check('userId').notEmpty().withMessage('user id required').trim(),
-    ], handleValidationErrors, 
+  app.post("/api/auth/bill/:userId/close", [
+    check('userId').notEmpty().withMessage('user id required').trim(),
+  ], handleValidationErrors,
     authJwt.verifyToken,
     controller.closeBill);
 };

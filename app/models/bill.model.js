@@ -32,7 +32,12 @@ module.exports = (sequelize, Sequelize) => {
       foreignKey: "userId",
       onDelete: "CASCADE"
     });
-    //Bill.belongsToMany(models.Cart, { through: "cart_bill" });
+    Bill.belongsToMany(models.Cart, { through: "cart_bill" });
+
+    Bill.belongsToMany(models.Cart, {
+      through: "cart_bill" ,
+      foreignKey: 'cartId'
+    });
   };
 
   return Bill;

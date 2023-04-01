@@ -26,11 +26,9 @@ module.exports = (sequelize, Sequelize) => {
       onDelete: "CASCADE"
     });
 
-    Stock.belongsToMany(models.Cart, {
-      through: models.CartStock,
-      foreignKey: 'stockId'
-    });
+    Stock.hasMany(models.CartStock, { foreignKey: 'stockId' });
   };
+
 
   return Stock;
 };
