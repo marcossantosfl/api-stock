@@ -55,7 +55,7 @@ exports.signup = async (req, res) => {
     const client = require("twilio")(accountSid, authToken);
 
     const message = await client.messages.create({
-      body: `Stock: Your OTP code is: ${code}, please do not share with anyone else`,
+      body: `Stock: Sua senha de acesso: ${code}, por favor, nao compartilhe com ninguem`,
       from: "++14346867271",
       to: phoneNumber,
     });
@@ -523,7 +523,7 @@ exports.updateCartItem = async (req, res) => {
       return res.status(404).send({ error: "Cart item not found" });
     }
 
-    const stock = await Stock.findOne({ where: { id: cartStockItem.stockId, userId: user.id } });
+    const stock = await Stock.findOne({ where: { id: cartItemId, userId: user.id } });
 
     if (!stock) {
       return res.status(400).send({ error: "Invalid stock ID" });
@@ -584,7 +584,7 @@ exports.deleteCartItem = async (req, res) => {
       return res.status(404).send({ error: "Cart item not found" });
     }
 
-    const stock = await Stock.findOne({ where: { id: cartItemId, userId: user.id } });
+    const stock = await Stock.findOne({ where: { id: cartStockItem.stockId, userId: user.id } });
 
     if (!stock) {
       return res.status(400).send({ error: "Invalid stock ID" });
