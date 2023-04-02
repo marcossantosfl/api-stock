@@ -59,6 +59,13 @@ module.exports = function (app) {
     authJwt.verifyToken,
     controller.createStock);
 
+  app.put(
+    "/api/auth/stocks/:userId/:stockId/:amount",
+    authJwt.verifyToken,
+    controller.updateStock);
+
+
+
   app.get("/api/auth/stocks/:userId", [
   ], handleValidationErrors,
     authJwt.verifyToken,
@@ -96,18 +103,19 @@ module.exports = function (app) {
   app.get(
     "/api/auth/cart/:userId",
     handleValidationErrors,
-     authJwt.verifyToken, controller.getCartItems);
+    authJwt.verifyToken, controller.getCartItems);
 
 
-  app.get("/api/auth/bill/:userId",
+  app.get(
+    "/api/auth/bill/:userId",
     authJwt.verifyToken,
     controller.getBill);
 
-  app.post("/api/auth/bill/:userId/close", [
-    check('userId').notEmpty().withMessage('user id required').trim(),
-  ], handleValidationErrors,
+  app.post(
+    "/api/auth/bill/:userId/close/day",
     authJwt.verifyToken,
-    controller.closeBill);
+    controller.closeDay);
+
 };
 
 // Middleware function to handle validation errors for routes that use express-validator

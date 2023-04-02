@@ -261,6 +261,43 @@ exports.createStock = async (req, res) => {
   }
 };
 
+// Update stock
+exports.updateStock = async (req, res) => {
+  try {
+    const { stockId, amount, userId } = req.params;
+    const decryptedId = encrypter.dencrypt(userId);
+    const user = await User.findOne({ where: { id: decryptedId } });
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
+    }
+
+    // Check if there is any open cart with items
+    const cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
+    if (cart) {
+      const cartStockItems = await CartStock.findAll({ where: { cartId: cart.id } });
+      if (cartStockItems.length > 0) {
+        return res.status(400).send({ error: "Please remove all items from the cart before closing the day" });
+      }
+    }
+
+    const stock = await Stock.findOne({ where: { id: stockId, userId: user.id } });
+    if (!stock) {
+      return res.status(404).send({ error: "Stock not found" });
+    }
+
+    const updatedStock = await stock.update({ amount: amount });
+
+    if (updatedStock[0] === 0) {
+      return res.status(404).send({ error: "Stock not found" });
+    }
+
+    return res.status(200).send({ message: "Stock updated successfully" });
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).send({ error: error.message });
+  }
+};
+
 //get all stock
 exports.getAllStocks = async (req, res) => {
   try {
@@ -333,7 +370,6 @@ exports.createCartItem = async (req, res) => {
     });
 
     bill.toPay += price * parseInt(quantity);
-   // bill.toPayTotal += 0.45;
     await bill.save();
 
     return res.status(201).send({ message: "Cart created successfully", cartItemId: stock.id, cartId: cart.id });
@@ -345,7 +381,7 @@ exports.createCartItem = async (req, res) => {
 
 // Get all cart items
 exports.getCartItems = async (req, res) => {
-  
+
   try {
     const decryptedId = encrypter.dencrypt(req.params.userId);
     const user = await User.findOne({ where: { id: decryptedId } });
@@ -360,14 +396,14 @@ exports.getCartItems = async (req, res) => {
       return res.status(200).send({ error: "Cart not found" });
     }
 
-    const cartItems = await CartStock.findAll({ 
+    const cartItems = await CartStock.findAll({
       where: { cartId: cart.id },
     });
-    
+
     const stockIds = cartItems.map(item => item.stockId);
-    
+
     const stocks = await Stock.findAll({ where: { id: stockIds } });
-    
+
     const cartItemsWithStock = cartItems.map(item => {
       const stock = stocks.find(s => s.id === item.stockId);
       return {
@@ -375,9 +411,9 @@ exports.getCartItems = async (req, res) => {
         stockName: stock ? stock.name : null
       };
     });
-    
+
     return res.status(200).send({ cartItems: cartItemsWithStock });
-    
+
   } catch (error) {
     console.log(JSON.stringify(error.message))
     return res.status(500).send({ error: error.message });
@@ -461,8 +497,14 @@ exports.closeCart = async (req, res) => {
     }
 
     bill.earn += 10;
-    bill.toPay -= 10;
+    if (req.body.selectedPrice > 0) {
+      bill.toPay = req.body.selectedPrice - 10;
+    }
+    else {
+      bill.toPay -= 10;
+    }
     bill.toPayTotal += 0.45;
+
     bill.end = true;
     await bill.save();
 
@@ -611,28 +653,44 @@ exports.deleteCartItem = async (req, res) => {
 };
 
 
-exports.closeBill = async (req, res) => {
+// Close
+exports.closeDay = async (req, res) => {
+
   try {
-    const decryptedId = encrypter.dencrypt(req.params.userId);
-    const action = req.body.action;
+    const userId = encrypter.dencrypt(req.params.userId);
+    const user = await User.findOne({ where: { id: userId } });
 
-    if (action !== 'close') {
-      return res.status(400).send({ error: "Invalid action" });
+    if (!user) {
+      return res.status(404).send({ error: "User not found" });
     }
 
-    const bill = await Bill.findOne({ where: { userId: decryptedId, end: false, paid: false } });
-
-    if (!bill) {
-      return res.status(404).send({ error: "Bill not found" });
+    // Check if there is any open cart with items
+    const cart = await Cart.findOne({ where: { userId: user.id, isClosed: false } });
+    if (cart) {
+      const cartStockItems = await CartStock.findAll({ where: { cartId: cart.id } });
+      if (cartStockItems.length > 0) {
+        return res.status(400).send({ error: "Please remove all items from the cart before closing the day" });
+      }
     }
 
-    bill.end = true;
-    bill.toPay -= 10;
-    bill.toPayTotal += 0.45;
-    await bill.save();
+    // Find bills and mark as paid
+    const bills = await Bill.findAll({ where: { userId: user.id, end: true, paid: false } });
 
-    return res.status(200).send({ message: "Bill closed" });
+
+    if (!bills.length) {
+      return res.status(201).send({ error: "No bills found to close" });
+    }
+
+    bills.forEach(async (bill) => {
+      bill.end = true;
+      bill.paid = true;
+      await bill.save();
+    });
+
+    return res.status(200).send({ message: "Bill day closed successfully" });
+
   } catch (error) {
+    console.log(error.message);
     return res.status(500).send({ error: error.message });
   }
 };
