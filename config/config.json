@@ -1,9 +1,9 @@
 {
   "development": {
-    "username": "doadmin",
-    "password": "AVNS_x3tZYhB4c9GCuZtc-Jv",
-    "database": "stock",
-    "host": "shiftycatcher-do-user-7219210-0.b.db.ondigitalocean.com",
+    "username": "",
+    "password": "",
+    "database": "",
+    "host": "",
     "dialect": "mysql",
     "port" : 25060
   },
