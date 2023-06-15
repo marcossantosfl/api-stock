@@ -13,9 +13,9 @@
 };*/
 
 module.exports = {
-  HOST: "shiftycatcher-do-user-7219210-0.b.db.ondigitalocean.com",
+  HOST: "host",
   USER: "doadmin",
-  PASSWORD: "AVNS_x3tZYhB4c9GCuZtc-Jv",
+  PASSWORD: "pass",
   DB: "stock",
   dialect: "mysql",
   pool: {
